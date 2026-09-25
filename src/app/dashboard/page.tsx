@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Letter, LetterStatus } from "@/lib/types";
+import UpiPaymentModal from "@/components/UpiPaymentModal";
+
 
 export default function DashboardPage() {
   const [letters, setLetters] = useState<Letter[]>([]);
@@ -274,50 +276,14 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Topup Modal */}
-      {showTopupModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl border border-stone-200">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-              <h3 className="font-serif font-bold text-lg text-slate-900">Top Up AnagataPost Balance</h3>
-              <button onClick={() => setShowTopupModal(false)} className="text-stone-400 hover:text-slate-800 font-bold">
-                ×
-              </button>
-            </div>
-
-            <p className="text-xs text-stone-600">
-              Select credit amount to add to your account for physical letters and API dispatch.
-            </p>
-
-            <div className="grid grid-cols-3 gap-3">
-              {[500, 1000, 2500].map((amt) => (
-                <button
-                  key={amt}
-                  onClick={() => setTopupAmount(amt)}
-                  className={`p-3 rounded-xl border text-center transition-all ${
-                    topupAmount === amt
-                      ? "border-red-700 bg-red-50 text-red-800 font-bold"
-                      : "border-stone-200 text-stone-700 hover:bg-stone-50"
-                  }`}
-                >
-                  <p className="text-base font-serif font-bold">₹{amt}</p>
-                  <p className="text-[10px] text-stone-500 font-mono">
-                    ~{Math.floor(amt / 99)} letters
-                  </p>
-                </button>
-              ))}
-            </div>
-
-            <button
-              disabled={isTopupLoading}
-              onClick={handleTopup}
-              className="w-full py-3 rounded-xl bg-red-700 hover:bg-red-800 text-white font-semibold text-sm shadow-md transition-colors"
-            >
-              {isTopupLoading ? "Processing Top-up..." : `Add ₹${topupAmount} to Balance`}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Dynamic UPI QR Code Topup Modal */}
+      <UpiPaymentModal
+        isOpen={showTopupModal}
+        onClose={() => setShowTopupModal(false)}
+        onSuccess={(newBal) => setBalanceInr(newBal)}
+        defaultAmount={500}
+      />
     </div>
   );
 }
+

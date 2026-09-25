@@ -251,7 +251,17 @@ export default function AdminFulfillmentPage() {
 
               {/* Action Buttons */}
               <div className="space-y-2 pt-2 border-t border-stone-100">
+                <Link
+                  href={`/letters/${selectedLetter.id}/print`}
+                  target="_blank"
+                  className="w-full py-2.5 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 text-slate-800 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <span>🖨️ Open Full A4 Letter & Envelope Sheet</span>
+                  <span className="text-[10px] text-stone-400">↗</span>
+                </Link>
+
                 <div className="grid grid-cols-2 gap-2">
+
                   <button
                     disabled={actionLoading || selectedLetter.status === "PRINTED"}
                     onClick={() => handleUpdateStatus(selectedLetter.id, "PRINTED")}

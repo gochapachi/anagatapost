@@ -89,6 +89,12 @@ export default function AdminFulfillmentPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Link
+            href="/admin/analytics"
+            className="px-4 py-2 rounded-xl bg-red-700 hover:bg-red-800 text-white text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-colors"
+          >
+            <span>📈 View Analytics</span>
+          </Link>
           <button
             onClick={() => window.print()}
             className="px-4 py-2 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 text-slate-800 text-xs font-semibold shadow-sm flex items-center gap-2"
@@ -96,6 +102,34 @@ export default function AdminFulfillmentPage() {
             <span>🖨️ Print Batch Sheets</span>
           </button>
         </div>
+      </div>
+
+      {/* Admin Sub Navigation */}
+      <div className="flex border-b border-stone-200 mb-8 space-x-8 text-sm">
+        <Link
+          href="/admin"
+          className="pb-3 border-b-2 border-red-700 text-red-700 font-semibold"
+        >
+          🖨️ Print Fulfillment Queue ({letters.length})
+        </Link>
+        <Link
+          href="/admin/analytics"
+          className="pb-3 text-stone-500 hover:text-slate-900 font-medium"
+        >
+          📈 Analytics & Heatmaps
+        </Link>
+        <Link
+          href="/admin/users"
+          className="pb-3 text-stone-500 hover:text-slate-900 font-medium"
+        >
+          👥 User & Wallet Management
+        </Link>
+        <Link
+          href="/admin/finance"
+          className="pb-3 text-stone-500 hover:text-slate-900 font-medium"
+        >
+          🏛️ GST & Financial Reports
+        </Link>
       </div>
 
       {alertMsg && (

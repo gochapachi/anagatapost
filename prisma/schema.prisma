@@ -7,6 +7,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum Role {
+  USER
+  ADMIN
+  PRINT_PARTNER
+}
+
 enum DeliveryType {
   SPEED_POST
   REGISTERED_POST
@@ -31,18 +37,72 @@ enum HandwritingFont {
 }
 
 model User {
-  id           String        @id @default(uuid())
-  email        String        @unique
-  name         String
-  phone        String?
-  company      String?
-  balancePaise Int           @default(50000) // ₹500 default trial balance
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  apiKeys      ApiKey[]
-  letters      Letter[]
-  transactions Transaction[]
-  webhooks     Webhook[]
+  id             String             @id @default(uuid())
+  email          String             @unique
+  name           String?
+  password       String?            // Hashed password for credentials login
+  role           Role               @default(USER)
+  phone          String?
+  company        String?
+  gstin          String?
+  billingAddress String?
+  image          String?
+  emailVerified  DateTime?
+  balancePaise   Int                @default(50000) // ₹500 default trial balance
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  // NextAuth relations
+  accounts       Account[]
+  sessions       Session[]
+
+  // Core app relations
+  apiKeys        ApiKey[]
+  letters        Letter[]
+  transactions   Transaction[]
+  webhooks       Webhook[]
+  addressBook    AddressBookEntry[]
+  templates      LetterTemplate[]
+  invoices       TaxInvoice[]
+  auditLogs      AuditLog[]
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 model ApiKey {
@@ -54,57 +114,117 @@ model ApiKey {
   active     Boolean   @default(true)
   lastUsedAt DateTime?
   createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Letter {
-  id               String          @id @default(uuid())
-  userId           String
-  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String          @id @default(uuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Recipient info
-  recipientName    String
-  recipientPhone   String?
-  recipientStreet  String
-  recipientArea    String?         // Locality / Landmark
-  recipientCity    String
+  recipientName     String
+  recipientPhone    String?
+  recipientStreet   String
+  recipientArea     String?         // Locality / Landmark
+  recipientCity     String
   recipientDistrict String?
-  recipientState   String
-  recipientPincode String          // 6 digit Indian PIN code
-  recipientCountry String          @default("IN")
+  recipientState    String
+  recipientPincode  String          // 6 digit Indian PIN code
+  recipientCountry  String          @default("IN")
 
-  // Sender info (optional, falls back to user profile or AnagataPost dispatch hub)
-  senderName       String?
-  senderStreet     String?
-  senderCity       String?
-  senderState      String?
-  senderPincode    String?
+  // Sender info
+  senderName        String?
+  senderStreet      String?
+  senderCity        String?
+  senderState       String?
+  senderPincode     String?
 
   // Content & Styling
-  content          String          @db.Text
-  handwritingFont  HandwritingFont @default(NONE)
-  hasLetterhead    Boolean         @default(false)
-  letterheadTitle  String?
-  colorPrint       Boolean         @default(false)
+  content           String          @db.Text
+  handwritingFont   HandwritingFont @default(NONE)
+  hasLetterhead     Boolean         @default(false)
+  letterheadTitle   String?
+  colorPrint        Boolean         @default(false)
 
   // Postal & Delivery
-  deliveryType     DeliveryType    @default(SPEED_POST)
-  status           LetterStatus    @default(DRAFT)
-  consignmentNumber String?        // Speed Post / Tracking code e.g. "ED123456789IN"
-  trackingUrl      String?
-  costPaise        Int             @default(9900) // ₹99
+  deliveryType      DeliveryType    @default(SPEED_POST)
+  status            LetterStatus    @default(DRAFT)
+  consignmentNumber String?         // Speed Post / Tracking code e.g. "ED123456789IN"
+  trackingUrl       String?
+  costPaise         Int             @default(9900) // ₹99
   
   // Timestamps
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  queuedAt         DateTime?
-  printedAt        DateTime?
-  dispatchedAt     DateTime?
-  deliveredAt      DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  queuedAt          DateTime?
+  printedAt         DateTime?
+  dispatchedAt      DateTime?
+  deliveredAt       DateTime?
 
   @@index([userId])
   @@index([status])
   @@index([recipientPincode])
   @@index([consignmentNumber])
+}
+
+model AddressBookEntry {
+  id                 String   @id @default(uuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label              String   @default("Office")
+  recipientName      String
+  recipientPhone     String?
+  recipientStreet    String
+  recipientLocality  String?
+  recipientCity      String
+  recipientDistrict  String?
+  recipientState     String
+  recipientPincode   String
+  isDefault          Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model LetterTemplate {
+  id              String          @id @default(uuid())
+  userId          String?
+  user            User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  category        String          @default("General")
+  content         String          @db.Text
+  handwritingFont HandwritingFont @default(NONE)
+  hasLetterhead   Boolean         @default(false)
+  letterheadTitle String?
+  isSystem        Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([category])
+}
+
+model TaxInvoice {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoiceNumber String   @unique
+  amountPaise   Int
+  subtotalPaise Int
+  cgstPaise     Int
+  sgstPaise     Int
+  igstPaise     Int
+  gstin         String?
+  paymentRef    String?  // Cashfree Order ID or Ref
+  status        String   @default("PAID")
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([invoiceNumber])
 }
 
 model Transaction {
@@ -114,7 +234,7 @@ model Transaction {
   amountPaise Int      // Positive for credit top-up, negative for letter send
   type        String   // CREDIT, DEBIT
   description String
-  referenceId String?  // Payment gateway or Letter ID
+  referenceId String?  // Cashfree order or Letter ID
   createdAt   DateTime @default(now())
 
   @@index([userId])
@@ -131,4 +251,17 @@ model Webhook {
   createdAt DateTime @default(now())
 
   @@index([userId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  details   String?  @db.Text
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
 }

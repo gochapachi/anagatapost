@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { DeliveryType, HandwritingFont } from "@/lib/types";
+import CashfreeModal from "@/components/CashfreeModal";
 
 export default function SendLetterPage() {
   const router = useRouter();
@@ -39,6 +40,24 @@ export default function SendLetterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [pincodeLoading, setPincodeLoading] = useState(false);
+  const [isCashfreeOpen, setIsCashfreeOpen] = useState(false);
+
+  // Read URL search params on mount (from Address Book or Templates)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("recipient")) setRecipientName(params.get("recipient")!);
+      if (params.get("phone")) setRecipientPhone(params.get("phone")!);
+      if (params.get("street")) setStreet(params.get("street")!);
+      if (params.get("locality")) setLocality(params.get("locality")!);
+      if (params.get("city")) setCity(params.get("city")!);
+      if (params.get("state")) setState(params.get("state")!);
+      if (params.get("pincode")) setPincode(params.get("pincode")!);
+      if (params.get("content")) setContent(params.get("content")!);
+      if (params.get("letterhead_title")) setLetterheadTitle(params.get("letterhead_title")!);
+      if (params.get("letterhead") === "true") setHasLetterhead(true);
+    }
+  }, []);
 
   // Auto-resolve PIN code when 6 digits entered
   useEffect(() => {
@@ -142,7 +161,12 @@ export default function SendLetterPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        setErrorMsg(data.error || "Failed to create letter");
+        if (res.status === 402 || data.error?.toLowerCase().includes("insufficient balance")) {
+          setErrorMsg("Your wallet balance is low. Please recharge with Cashfree to dispatch immediately.");
+          setIsCashfreeOpen(true);
+        } else {
+          setErrorMsg(data.error || "Failed to create letter");
+        }
         return;
       }
 
@@ -173,8 +197,20 @@ export default function SendLetterPage() {
               Live A4 print preview & realistic envelope layout with India Post Speed Post compliance.
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-stone-500">Quick Template:</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Link
+              href="/dashboard/addresses"
+              className="px-3 py-1.5 rounded-lg bg-white border border-stone-200 hover:bg-stone-50 text-slate-800 font-semibold shadow-sm flex items-center gap-1.5 transition-colors"
+            >
+              <span>📇 Address Book</span>
+            </Link>
+            <Link
+              href="/dashboard/templates"
+              className="px-3 py-1.5 rounded-lg bg-white border border-stone-200 hover:bg-stone-50 text-slate-800 font-semibold shadow-sm flex items-center gap-1.5 transition-colors"
+            >
+              <span>📜 All Templates</span>
+            </Link>
+            <span className="text-stone-400 pl-2">Quick:</span>
             <button
               onClick={() => loadTemplate("welcome")}
               className="px-2.5 py-1 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-800 font-medium"
@@ -608,6 +644,16 @@ export default function SendLetterPage() {
           )}
         </div>
       </div>
+
+      {/* Cashfree Recharge Modal */}
+      <CashfreeModal
+        isOpen={isCashfreeOpen}
+        onClose={() => setIsCashfreeOpen(false)}
+        onSuccess={() => {
+          setErrorMsg("");
+        }}
+        defaultAmount={500}
+      />
     </div>
   );
 }

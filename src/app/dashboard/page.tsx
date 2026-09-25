@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Letter, LetterStatus } from "@/lib/types";
-import UpiPaymentModal from "@/components/UpiPaymentModal";
+import CashfreeModal from "@/components/CashfreeModal";
 
 
 export default function DashboardPage() {
@@ -105,6 +105,11 @@ export default function DashboardPage() {
       {/* Header & Wallet Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
         <div>
+          <div className="flex items-center gap-2 text-xs font-mono text-stone-500 mb-1">
+            <Link href="/" className="hover:text-red-700">Home</Link>
+            <span>/</span>
+            <span className="text-slate-900 font-semibold">Dashboard</span>
+          </div>
           <h1 className="text-3xl font-serif font-bold text-slate-900">Physical Mail Dashboard</h1>
           <p className="text-sm text-stone-600 mt-1">
             Track letters, inspect India Post Speed Post consignments, and manage balance.
@@ -121,9 +126,37 @@ export default function DashboardPage() {
             onClick={() => setShowTopupModal(true)}
             className="px-3.5 py-2 rounded-xl bg-red-700 hover:bg-red-800 text-white text-xs font-semibold shadow-sm transition-colors"
           >
-            + Top Up
+            + Top Up (Cashfree)
           </button>
         </div>
+      </div>
+
+      {/* Sub Navigation Bar */}
+      <div className="flex border-b border-stone-200 mb-8 space-x-8 text-sm">
+        <Link
+          href="/dashboard"
+          className="pb-3 border-b-2 border-red-700 text-red-700 font-semibold"
+        >
+          📦 Letters Archive ({letters.length})
+        </Link>
+        <Link
+          href="/dashboard/addresses"
+          className="pb-3 text-stone-500 hover:text-slate-900 font-medium"
+        >
+          📇 Address Book
+        </Link>
+        <Link
+          href="/dashboard/templates"
+          className="pb-3 text-stone-500 hover:text-slate-900 font-medium"
+        >
+          📜 Letter Templates
+        </Link>
+        <Link
+          href="/dashboard/billing"
+          className="pb-3 text-stone-500 hover:text-slate-900 font-medium"
+        >
+          💳 Invoices & Wallet
+        </Link>
       </div>
 
       {/* Metric Cards */}
@@ -276,11 +309,13 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Dynamic UPI QR Code Topup Modal */}
-      <UpiPaymentModal
+      {/* Cashfree Payment Gateway Topup Modal */}
+      <CashfreeModal
         isOpen={showTopupModal}
         onClose={() => setShowTopupModal(false)}
-        onSuccess={(newBal) => setBalanceInr(newBal)}
+        onSuccess={() => {
+          fetchDashboardData();
+        }}
         defaultAmount={500}
       />
     </div>

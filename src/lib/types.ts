@@ -1,3 +1,5 @@
+export type Role = "USER" | "ADMIN" | "PRINT_PARTNER";
+
 export type DeliveryType = "SPEED_POST" | "REGISTERED_POST" | "STANDARD";
 
 export type LetterStatus =
@@ -88,4 +90,70 @@ export interface EvolutionWhatsAppPayload {
   number: string;
   message: string;
   mediaUrl?: string;
+}
+
+export interface AddressBookEntry {
+  id: string;
+  userId: string;
+  label: string;
+  recipientName: string;
+  recipientPhone?: string | null;
+  recipientStreet: string;
+  recipientLocality?: string | null;
+  recipientCity: string;
+  recipientDistrict?: string | null;
+  recipientState: string;
+  recipientPincode: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LetterTemplate {
+  id: string;
+  userId?: string | null;
+  title: string;
+  description?: string | null;
+  category: string;
+  content: string;
+  handwritingFont: HandwritingFont;
+  hasLetterhead: boolean;
+  letterheadTitle?: string | null;
+  isSystem: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaxInvoice {
+  id: string;
+  userId: string;
+  invoiceNumber: string;
+  amountPaise: number;
+  subtotalPaise: number;
+  cgstPaise: number;
+  sgstPaise: number;
+  igstPaise: number;
+  gstin?: string | null;
+  paymentRef?: string | null;
+  status: "PAID" | "PENDING" | "CANCELLED";
+  createdAt: string;
+}
+
+export interface AuditLog {
+  id: string;
+  userId?: string | null;
+  action: string;
+  details?: string | null;
+  ipAddress?: string | null;
+  createdAt: string;
+}
+
+export interface UserSessionProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  balanceInr: string;
+  company?: string | null;
+  gstin?: string | null;
 }

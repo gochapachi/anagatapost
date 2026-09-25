@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-handwriting: "Caveat", "Dancing Script", cursive;
+}
+
+body {
+  background-color: #faf8f5;
+  color: #1a1d20;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Indian Postal Stamp Serrated Border Effect */
+.stamp-card {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #e5dfd5;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+}
+
+.stamp-card::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: radial-gradient(circle, transparent, transparent 50%, #ffffff 50%, #ffffff 100%);
+  background-size: 10px 8px;
+}
+
+/* Realistic A4 Parchment Paper Simulation */
+.parchment-sheet {
+  background: #fdfbf7;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  background-image: 
+    radial-gradient(#e5dfd5 0.75px, transparent 0.75px),
+    radial-gradient(#e5dfd5 0.75px, #fdfbf7 0.75px);
+  background-size: 30px 30px;
+  background-position: 0 0, 15px 15px;
+}
+
+/* Authentic Indian Postal Stamp simulation */
+.india-stamp {
+  border: 2px dashed #b32025;
+  outline: 3px solid #fef2f2;
+  position: relative;
+  background: #ffffff;
+}
+
+.india-stamp::after {
+  content: "INDIA POST";
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: 7px;
+  font-weight: 800;
+  color: #b32025;
+  letter-spacing: 0.5px;
+  opacity: 0.85;
+}
+
+/* Circular Postmark cancellation stamp */
+.postmark-seal {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px double #b32025;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(-12deg);
+  opacity: 0.85;
+  font-family: var(--font-mono);
+  color: #b32025;
+  user-select: none;
+}
+
+/* Barcode simulation */
+.postal-barcode {
+  background: repeating-linear-gradient(
+    90deg,
+    #1e293b,
+    #1e293b 2px,
+    transparent 2px,
+    transparent 4px,
+    #1e293b 4px,
+    #1e293b 7px,
+    transparent 7px,
+    transparent 9px
+  );
+  height: 36px;
+  width: 100%;
+}
+
+/* Handwriting Font Class */
+.font-handwriting {
+  font-family: var(--font-handwriting);
+  font-size: 1.35rem;
+  line-height: 1.6;
+  letter-spacing: 0.3px;
+}

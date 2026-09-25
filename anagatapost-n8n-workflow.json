@@ -1,0 +1,89 @@
+{
+  "name": "AnagataPost - Physical Mail Automation & Evolution WhatsApp Dispatch",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "anagatapost-events",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "node-webhook-1",
+      "name": "AnagataPost Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.event }}",
+              "value2": "letter.dispatched"
+            }
+          ]
+        }
+      },
+      "id": "node-if-dispatched",
+      "name": "Is Dispatched?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://evo.anagataitsolutions.in/message/sendText/anagata-post",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_EVOLUTION_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"91{{ $json.body.letter.recipientPhone }}\",\n  \"text\": \"📮 *AnagataPost Delivery Update*\\n\\nA real physical letter addressed to *{{ $json.body.letter.recipientName }}* has been dispatched via *India Post Speed Post*!\\n\\n📦 *Consignment No:* `{{ $json.body.letter.consignmentNumber }}`\\n📍 *City:* {{ $json.body.letter.address.city }} ({{ $json.body.letter.address.pincode }})\\n\\n🔗 *Track Live:* https://post.anagataitsolutions.in{{ $json.body.letter.trackingUrl }}\"\n}"
+      },
+      "id": "node-evolution-whatsapp",
+      "name": "Evolution API - Send WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [720, 240]
+    }
+  ],
+  "connections": {
+    "AnagataPost Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Is Dispatched?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Dispatched?": {
+      "main": [
+        [
+          {
+            "node": "Evolution API - Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

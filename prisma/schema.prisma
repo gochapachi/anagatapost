@@ -1,0 +1,134 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum DeliveryType {
+  SPEED_POST
+  REGISTERED_POST
+  STANDARD
+}
+
+enum LetterStatus {
+  DRAFT
+  QUEUED
+  PRINTED
+  IN_TRANSIT
+  DELIVERED
+  RETURNED
+  FAILED
+}
+
+enum HandwritingFont {
+  NONE
+  CAVEAT
+  KALAM
+  SACRAMENTO
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  name         String
+  phone        String?
+  company      String?
+  balancePaise Int           @default(50000) // ₹500 default trial balance
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  apiKeys      ApiKey[]
+  letters      Letter[]
+  transactions Transaction[]
+  webhooks     Webhook[]
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key        String    @unique
+  name       String    @default("Default Key")
+  active     Boolean   @default(true)
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model Letter {
+  id               String          @id @default(uuid())
+  userId           String
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Recipient info
+  recipientName    String
+  recipientPhone   String?
+  recipientStreet  String
+  recipientArea    String?         // Locality / Landmark
+  recipientCity    String
+  recipientDistrict String?
+  recipientState   String
+  recipientPincode String          // 6 digit Indian PIN code
+  recipientCountry String          @default("IN")
+
+  // Sender info (optional, falls back to user profile or AnagataPost dispatch hub)
+  senderName       String?
+  senderStreet     String?
+  senderCity       String?
+  senderState      String?
+  senderPincode    String?
+
+  // Content & Styling
+  content          String          @db.Text
+  handwritingFont  HandwritingFont @default(NONE)
+  hasLetterhead    Boolean         @default(false)
+  letterheadTitle  String?
+  colorPrint       Boolean         @default(false)
+
+  // Postal & Delivery
+  deliveryType     DeliveryType    @default(SPEED_POST)
+  status           LetterStatus    @default(DRAFT)
+  consignmentNumber String?        // Speed Post / Tracking code e.g. "ED123456789IN"
+  trackingUrl      String?
+  costPaise        Int             @default(9900) // ₹99
+  
+  // Timestamps
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  queuedAt         DateTime?
+  printedAt        DateTime?
+  dispatchedAt     DateTime?
+  deliveredAt      DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@index([recipientPincode])
+  @@index([consignmentNumber])
+}
+
+model Transaction {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amountPaise Int      // Positive for credit top-up, negative for letter send
+  type        String   // CREDIT, DEBIT
+  description String
+  referenceId String?  // Payment gateway or Letter ID
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Webhook {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url       String
+  secret    String
+  events    String   // JSON string array of subscribed events
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}

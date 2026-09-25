@@ -1,0 +1,46 @@
+services:
+  anagatapost:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:anagatapost_secret_2026@postgres:5432/anagatapost?schema=public
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://post.anagataitsolutions.in}
+      - EVOLUTION_API_URL=${EVOLUTION_API_URL:-https://evo.anagataitsolutions.in}
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY:-}
+      - EVOLUTION_INSTANCE_NAME=${EVOLUTION_INSTANCE_NAME:-anagata-post}
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-https://n8n.anagataitsolutions.in/webhook/anagatapost-events}
+      - ADMIN_SECRET_KEY=${ADMIN_SECRET_KEY:-anagata_admin_secret_2026}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - anagatapost_net
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: anagatapost_secret_2026
+      POSTGRES_DB: anagatapost
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d anagatapost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - anagatapost_net
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  anagatapost_net:
+    driver: bridge

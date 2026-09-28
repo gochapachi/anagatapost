@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { inMemoryStore } from "@/lib/db";
+import { store } from "@/lib/db";
+import { requireAdmin } from "@/lib/session";
 import { Role } from "@/lib/types";
 
+/** Full customer roster (identity fields + balances) — ADMIN only. */
 export async function GET() {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth.response;
+
   try {
-    const rawUsers = await inMemoryStore.getAllUsers();
-    const letters = await inMemoryStore.getLetters();
+    const rawUsers = await store.getAllUsers();
+    const letters = await store.getLetters();
 
     const users = rawUsers.map((u) => {
       const userLetters = letters.filter((l) => l.userId === u.id);
@@ -29,7 +34,11 @@ export async function GET() {
   }
 }
 
+/** Role changes and balance minting are the highest-privilege writes — ADMIN only. */
 export async function PATCH(req: NextRequest) {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await req.json();
     const { userId, role, balanceAdjustmentInr } = body;
@@ -42,16 +51,21 @@ export async function PATCH(req: NextRequest) {
       if (!["USER", "ADMIN", "PRINT_PARTNER"].includes(role)) {
         return NextResponse.json({ error: "Invalid role specified" }, { status: 400 });
       }
-      await inMemoryStore.updateUserRole(userId, role as Role);
-      inMemoryStore.logAudit("ADMIN_ROLE_CHANGE", `Updated user ${userId} role to ${role}`);
+      await store.updateUserRole(userId, role as Role);
+      await store.logAudit(
+        "ADMIN_ROLE_CHANGE",
+        `Admin ${auth.user.email ?? auth.user.id} updated user ${userId} role to ${role}`,
+        auth.user.id
+      );
     }
 
     if (balanceAdjustmentInr !== undefined) {
       const deltaPaise = Math.round(Number(balanceAdjustmentInr) * 100);
-      const newBal = await inMemoryStore.adjustUserBalance(userId, deltaPaise);
-      inMemoryStore.logAudit(
+      const newBal = await store.adjustUserBalance(userId, deltaPaise);
+      await store.logAudit(
         "ADMIN_BALANCE_ADJUSTMENT",
-        `Adjusted user ${userId} balance by ₹${balanceAdjustmentInr}`
+        `Admin ${auth.user.email ?? auth.user.id} adjusted user ${userId} balance by ₹${balanceAdjustmentInr}`,
+        auth.user.id
       );
       return NextResponse.json({
         success: true,

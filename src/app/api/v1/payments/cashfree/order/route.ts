@@ -1,18 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCashfreeOrder } from "@/lib/cashfree";
-import { inMemoryStore } from "@/lib/db";
+import { store } from "@/lib/db";
+import { env, isCashfreeConfigured } from "@/lib/env";
+import { requireSession } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireSession();
+  if (!auth.ok) return auth.response;
+
+  // A production deployment must never fall back to a simulated payment session.
+  if (env.isProduction && !isCashfreeConfigured()) {
+    return NextResponse.json(
+      {
+        error: "payments_unavailable",
+        message: "The payment provider is not configured on this deployment.",
+      },
+      { status: 503 }
+    );
+  }
+
   try {
     const body = await req.json();
-    const {
-      amount_inr,
-      letterId,
-      customer_id,
-      customer_name,
-      customer_email,
-      customer_phone,
-    } = body;
+    const { amount_inr, letterId, customer_phone } = body;
 
     const amount = Number(amount_inr);
     if (!amount || amount < 10) {
@@ -23,10 +32,14 @@ export async function POST(req: NextRequest) {
     }
 
     const orderId = `cf_order_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const custId = customer_id || "usr_demo";
-    const custEmail = customer_email || "customer@anagataitsolutions.in";
-    const custPhone = customer_phone || "9876543210";
-    const custName = customer_name || "Anagata Customer";
+    // Payer identity always comes from the session — a caller cannot push a
+    // charge onto someone else's account by spoofing customer_id.
+    const user = auth.user;
+    const custId = user.id;
+    const custEmail = user.email || "customer@anagataitsolutions.in";
+    const custName = user.name || "Anagata Customer";
+    // Cashfree accepts only a 10-digit Indian mobile; PR-1 moves this to the profile.
+    const custPhone = String(customer_phone || "9876543210").replace(/\D/g, "").slice(-10);
 
     const orderNote = letterId
       ? `Letter Postage Dispatch (${letterId})`
@@ -51,7 +64,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    inMemoryStore.logAudit(
+    await store.logAudit(
       "PAYMENT_ORDER_CREATED",
       `Created Cashfree order ${orderId} for ₹${amount}`,
       custId

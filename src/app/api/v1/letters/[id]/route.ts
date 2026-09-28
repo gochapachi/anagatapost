@@ -1,16 +1,53 @@
 import { NextRequest, NextResponse } from "next/server";
-import { inMemoryStore } from "@/lib/db";
+import { store } from "@/lib/db";
 import { Letter } from "@/lib/types";
+import { getSessionUser, requireOwner, requireSession } from "@/lib/session";
+
+/**
+ * `/track/{id}` resolves a letter by ID alone, so the anonymous response carries
+ * only tracking facts. Letter body, recipient phone, house street/locality and
+ * sender identity never leave the server to an anonymous caller.
+ */
+function redactForTracking(letter: Letter): Record<string, unknown> {
+  return {
+    id: letter.id,
+    status: letter.status,
+    recipientName: letter.recipientName,
+    address: {
+      city: letter.address.city,
+      state: letter.address.state,
+      pincode: letter.address.pincode,
+      country: "IN",
+    },
+    deliveryType: letter.deliveryType,
+    consignmentNumber: letter.consignmentNumber ?? null,
+    trackingUrl: letter.trackingUrl,
+    createdAt: letter.createdAt,
+    queuedAt: letter.queuedAt ?? null,
+    printedAt: letter.printedAt ?? null,
+    dispatchedAt: letter.dispatchedAt ?? null,
+    deliveredAt: letter.deliveredAt ?? null,
+    updatedAt: letter.updatedAt,
+  };
+}
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-  const letter = await inMemoryStore.getLetterById(id);
+  const letter = await store.getLetterById(id);
 
   if (!letter) {
     return NextResponse.json({ error: `Letter not found with ID ${id}` }, { status: 404 });
+  }
+
+  // Anonymous callers get the tracking projection; the owner and staff get the
+  // full record (the print sheet needs content, sender and phone).
+  const viewer = await getSessionUser();
+  if (viewer) {
+    const denied = requireOwner(viewer, letter.userId);
+    if (denied) return denied;
   }
 
   // Construct status timeline milestones
@@ -49,19 +86,30 @@ export async function GET(
     },
   ];
 
-  return NextResponse.json({ letter, milestones });
+  const payload = viewer ? letter : redactForTracking(letter);
+  return NextResponse.json({
+    letter: payload,
+    milestones,
+    ...(viewer ? {} : { privacy: "tracking" }),
+  });
 }
 
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireSession();
+  if (!auth.ok) return auth.response;
+
   const { id } = await context.params;
-  const existing = await inMemoryStore.getLetterById(id);
+  const existing = await store.getLetterById(id);
 
   if (!existing) {
     return NextResponse.json({ error: `Letter not found with ID ${id}` }, { status: 404 });
   }
+
+  const denied = requireOwner(auth.user, existing.userId);
+  if (denied) return denied;
 
   if (existing.status !== "DRAFT") {
     return NextResponse.json(
@@ -94,6 +142,6 @@ export async function PATCH(
     };
   }
 
-  const updated = await inMemoryStore.updateLetter(id, updates);
+  const updated = await store.updateLetter(id, updates);
   return NextResponse.json({ letter: updated });
 }

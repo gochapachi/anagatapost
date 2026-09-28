@@ -9,8 +9,13 @@
     "start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
     "prisma:push": "prisma db push",
-    "prisma:seed": "node prisma/seed.js"
+    "prisma:seed": "node prisma/seed.js",
+    "smoke:store": "tsc scripts/store-smoke.ts --outDir .smoke-out --module commonjs --target es2022 --moduleResolution node --esModuleInterop --skipLibCheck && node .smoke-out/scripts/store-smoke.js"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

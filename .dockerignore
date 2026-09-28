@@ -5,7 +5,16 @@ npm-debug.log
 README.md
 .next
 .git
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.gitignore
+out
+coverage
+
+# Never bake real credentials into an image layer or expose them to the builder.
+.env
+.env.*
+!.env.example
+
+# Local orchestration + vendor artifacts are not application source.
+docker-compose.yml
+anagatapost-n8n-workflow.json
+prisma/dev.db*.db

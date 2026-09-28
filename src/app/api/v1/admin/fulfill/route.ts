@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { inMemoryStore } from "@/lib/db";
+import { store } from "@/lib/db";
 import { LetterStatus } from "@/lib/types";
 import { sendDispatchWhatsAppNotification } from "@/lib/evolution-api";
 import { triggerN8nWebhook } from "@/lib/n8n";
+import { requireStaff } from "@/lib/session";
 
+/** Fulfilment queue writes — ADMIN or PRINT_PARTNER only. */
 export async function POST(request: NextRequest) {
+  const auth = await requireStaff();
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json();
     const { letterId, status, consignmentNumber } = body;
@@ -13,7 +18,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "letterId and status are required" }, { status: 400 });
     }
 
-    const letter = await inMemoryStore.getLetterById(letterId);
+    const letter = await store.getLetterById(letterId);
     if (!letter) {
       return NextResponse.json({ error: `Letter not found: ${letterId}` }, { status: 404 });
     }
@@ -38,7 +43,7 @@ export async function POST(request: NextRequest) {
       updates.deliveredAt = nowIso;
     }
 
-    const updated = await inMemoryStore.updateLetter(letterId, updates);
+    const updated = await store.updateLetter(letterId, updates);
     if (!updated) {
       return NextResponse.json({ error: "Failed to update letter" }, { status: 500 });
     }

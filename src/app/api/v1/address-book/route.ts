@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { inMemoryStore } from "@/lib/db";
+import { store } from "@/lib/db";
+import { requireSession } from "@/lib/session";
 
 export async function GET(req: NextRequest) {
+  const auth = await requireSession();
+  if (!auth.ok) return auth.response;
+
   try {
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId") || "usr_demo";
-    const entries = await inMemoryStore.getAddressBook(userId);
+    // Address books hold recipient PII and are always scoped to the caller.
+    const entries = await store.getAddressBook(auth.user.id);
     return NextResponse.json({ entries });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -13,10 +16,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireSession();
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await req.json();
     const {
-      userId = "usr_demo",
       label,
       recipientName,
       recipientPhone,
@@ -36,8 +41,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const saved = await inMemoryStore.saveAddressBookEntry({
-      userId,
+    const saved = await store.saveAddressBookEntry({
+      // Ownership always comes from the session.
+      userId: auth.user.id,
       label: label || "Office",
       recipientName,
       recipientPhone: recipientPhone || null,
@@ -50,7 +56,7 @@ export async function POST(req: NextRequest) {
       isDefault: Boolean(isDefault),
     });
 
-    inMemoryStore.logAudit("ADDRESS_BOOK_ADDED", `Saved recipient ${recipientName}`, userId);
+    await store.logAudit("ADDRESS_BOOK_ADDED", `Saved recipient ${recipientName}`, auth.user.id);
 
     return NextResponse.json({ success: true, entry: saved });
   } catch (error: any) {
@@ -59,16 +65,19 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const auth = await requireSession();
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
-    const userId = searchParams.get("userId") || "usr_demo";
+    const userId = auth.user.id;
 
     if (!id) {
       return NextResponse.json({ error: "Address ID is required" }, { status: 400 });
     }
 
-    const deleted = await inMemoryStore.deleteAddressBookEntry(id, userId);
+    const deleted = await store.deleteAddressBookEntry(id, userId);
     return NextResponse.json({ success: deleted });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

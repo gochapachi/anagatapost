@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { inMemoryStore } from "@/lib/db";
+import { store } from "@/lib/db";
 import { HandwritingFont } from "@/lib/types";
+import { requireSession } from "@/lib/session";
 
 export async function GET(req: NextRequest) {
+  const auth = await requireSession();
+  if (!auth.ok) return auth.response;
+
   try {
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId") || undefined;
-    const templates = await inMemoryStore.getTemplates(userId);
+    // The store unions system templates with the caller's own drafts, so the
+    // caller id must come from the session, never from the query string.
+    const templates = await store.getTemplates(auth.user.id);
     return NextResponse.json({ templates });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -14,10 +18,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireSession();
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await req.json();
     const {
-      userId = "usr_demo",
       title,
       description,
       category = "General",
@@ -34,8 +40,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const saved = await inMemoryStore.saveTemplate({
-      userId,
+    const saved = await store.saveTemplate({
+      // Ownership always comes from the session.
+      userId: auth.user.id,
       title,
       description: description || null,
       category,
@@ -46,7 +53,7 @@ export async function POST(req: NextRequest) {
       isSystem: false,
     });
 
-    inMemoryStore.logAudit("TEMPLATE_CREATED", `Created template "${title}"`, userId);
+    await store.logAudit("TEMPLATE_CREATED", `Created template "${title}"`, auth.user.id);
 
     return NextResponse.json({ success: true, template: saved });
   } catch (error: any) {
@@ -55,16 +62,19 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const auth = await requireSession();
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
-    const userId = searchParams.get("userId") || "usr_demo";
+    const userId = auth.user.id;
 
     if (!id) {
       return NextResponse.json({ error: "Template ID is required" }, { status: 400 });
     }
 
-    const deleted = await inMemoryStore.deleteTemplate(id, userId);
+    const deleted = await store.deleteTemplate(id, userId);
     return NextResponse.json({ success: deleted });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

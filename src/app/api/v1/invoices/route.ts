@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { inMemoryStore } from "@/lib/db";
+import { store } from "@/lib/db";
+import { isStaff, requireSession } from "@/lib/session";
 
 export async function GET(req: NextRequest) {
+  const auth = await requireSession();
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId") || undefined;
-    const invoices = await inMemoryStore.getInvoices(userId);
+    // A GST invoice is a tax document: a customer only ever reads their own book.
+    const userId = isStaff(auth.user)
+      ? searchParams.get("userId") || undefined
+      : auth.user.id;
+    const invoices = await store.getInvoices(userId);
 
     const formatted = invoices.map((inv) => ({
       ...inv,

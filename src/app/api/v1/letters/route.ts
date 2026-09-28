@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { inMemoryStore } from "@/lib/db";
+import { store } from "@/lib/db";
 import { CreateLetterPayload, Letter, DeliveryType, HandwritingFont } from "@/lib/types";
 import { validateIndianPincode, lookupPincode } from "@/lib/pincodes";
 import { triggerN8nWebhook } from "@/lib/n8n";
+import { isStaff, requireSession } from "@/lib/session";
 
 function calculateLetterCost(deliveryType: DeliveryType, colorPrint: boolean): number {
   let basePaise = 9900; // Speed Post default ₹99
@@ -13,11 +14,21 @@ function calculateLetterCost(deliveryType: DeliveryType, colorPrint: boolean): n
 }
 
 export async function GET(request: NextRequest) {
-  const letters = await inMemoryStore.getLetters();
+  const auth = await requireSession();
+  if (!auth.ok) return auth.response;
+
+  const all = await store.getLetters();
+  const letters = isStaff(auth.user)
+    ? all
+    : all.filter((letter) => letter.userId === auth.user.id);
   return NextResponse.json({ letters, total: letters.length });
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireSession();
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
+
   try {
     const body: CreateLetterPayload = await request.json();
 
@@ -75,30 +86,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2. Check balance if sending immediately
-    if (shouldSendImmediately) {
-      const currentBalance = await inMemoryStore.getBalancePaise();
-      if (currentBalance < costPaise) {
-        return NextResponse.json(
-          {
-            error: "Insufficient balance to send letter",
-            balance_paise: currentBalance,
-            letter_cost_paise: costPaise,
-            balance_inr: (currentBalance / 100).toFixed(2),
-            cost_inr: (costPaise / 100).toFixed(2),
-          },
-          { status: 402 }
-        );
-      }
-      await inMemoryStore.deductBalance(costPaise);
-    }
-
+    // 2. Build the letter. The balance check and the debit are deliberately not
+    //    done here: `createLetterCharged` performs both in one database
+    //    transaction, so a stale read here can no longer spend money twice.
     const letterId = `ltr_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
     const nowIso = new Date().toISOString();
 
     const newLetter: Letter = {
       id: letterId,
-      userId: "usr_demo",
+      userId: user.id,
       recipientName: body.recipient.trim(),
       recipientPhone: body.phone?.trim() || null,
       address: {
@@ -131,22 +127,47 @@ export async function POST(request: NextRequest) {
       queuedAt: shouldSendImmediately ? nowIso : null,
     };
 
-    await inMemoryStore.saveLetter(newLetter);
+    // Charge and persist together. Either the wallet is debited and the letter is
+    // queued, or neither happened — the previous version debited first and could
+    // lose the money if the insert failed.
+    let storedLetter = newLetter;
+    let remainingBalance: number;
+    if (shouldSendImmediately) {
+      const charge = await store.createLetterCharged(
+        newLetter,
+        `Letter to ${newLetter.recipientName} (${deliveryType})`
+      );
+      if (!charge.ok) {
+        return NextResponse.json(
+          {
+            error: "Insufficient balance to send letter",
+            balance_paise: charge.balancePaise,
+            letter_cost_paise: costPaise,
+            balance_inr: (charge.balancePaise / 100).toFixed(2),
+            cost_inr: (costPaise / 100).toFixed(2),
+          },
+          { status: 402 }
+        );
+      }
+      storedLetter = charge.letter ?? newLetter;
+      remainingBalance = charge.balancePaise;
+    } else {
+      await store.saveLetter(newLetter);
+      remainingBalance = await store.getBalancePaise(user.id);
+    }
 
     // Trigger n8n webhook asynchronously
-    triggerN8nWebhook(shouldSendImmediately ? "letter.queued" : "letter.created", newLetter);
-
-    const remainingBalance = await inMemoryStore.getBalancePaise();
+    triggerN8nWebhook(shouldSendImmediately ? "letter.queued" : "letter.created", storedLetter);
 
     return NextResponse.json(
       {
-        id: newLetter.id,
-        status: newLetter.status.toLowerCase(),
+        id: storedLetter.id,
+        status: storedLetter.status.toLowerCase(),
         balance_paise: remainingBalance,
         balance_inr: (remainingBalance / 100).toFixed(2),
         cost_inr: (costPaise / 100).toFixed(2),
-        tracking_url: newLetter.trackingUrl,
-        letter: newLetter,
+        tracking_url: storedLetter.trackingUrl,
+        letter: storedLetter,
       },
       { status: 201 }
     );

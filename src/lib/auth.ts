@@ -2,7 +2,8 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
-import { inMemoryStore } from "./db";
+import { env } from "./env";
+import { store } from "./db";
 import { Role } from "./types";
 
 export const authOptions: NextAuthOptions = {
@@ -36,7 +37,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         const normalizedEmail = credentials.email.toLowerCase().trim();
-        const user = await inMemoryStore.findUserByEmail(normalizedEmail);
+        const user = await store.findUserByEmail(normalizedEmail);
 
         if (!user) {
           throw new Error("No account found with this email");
@@ -49,7 +50,9 @@ export const authOptions: NextAuthOptions = {
           }
         }
 
-        inMemoryStore.logAudit("USER_LOGIN", `User ${user.email} logged in`, user.id);
+        // Fire-and-forget before the session is issued: a failed audit write must
+        // not lock a user out of their own account.
+        void store.logAudit("USER_LOGIN", `User ${user.email} logged in`, user.id);
 
         return {
           id: user.id,
@@ -81,7 +84,13 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (token && session.user) {
         (session.user as any).id = token.id as string;
-        (session.user as any).role = (token.role as Role) || "USER";
+        // ADMIN_EMAILS keeps working as an emergency bootstrap for the first
+        // operator before roles live in Postgres (PR-1).
+        const email = session.user.email?.toLowerCase().trim();
+        const isAdmin = email !== undefined && env.adminEmails.includes(email);
+        (session.user as any).role = isAdmin
+          ? "ADMIN"
+          : ((token.role as Role) || "USER");
         (session.user as any).balancePaise = (token.balancePaise as number) || 50000;
         (session.user as any).company = token.company as string | null;
         (session.user as any).gstin = token.gstin as string | null;
@@ -89,5 +98,7 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  secret: process.env.NEXTAUTH_SECRET || "anagatapost_super_secret_jwt_key_2026_prod",
+  // `env` refuses to boot production without NEXTAUTH_SECRET; the repository
+  // previously shipped a hard-coded signing key, which let anyone forge sessions.
+  secret: env.nextauthSecret,
 };

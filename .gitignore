@@ -21,7 +21,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Environment
+# Environment — only .env.example may be committed
+.env
+.env.*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local
@@ -33,3 +36,6 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Throwaway build output of the store smoke test (npm run smoke:store)
+.smoke-out/

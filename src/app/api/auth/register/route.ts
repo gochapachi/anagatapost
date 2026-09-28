@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { inMemoryStore } from "@/lib/db";
+import { store } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const existing = await inMemoryStore.findUserByEmail(normalizedEmail);
+    const existing = await store.findUserByEmail(normalizedEmail);
 
     if (existing) {
       return NextResponse.json(
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = await inMemoryStore.createUser({
+    const newUser = await store.createUser({
       name,
       email: normalizedEmail,
       password: hashedPassword,
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       balancePaise: 50000, // ₹500 complimentary sign-up credit
     });
 
-    inMemoryStore.logAudit("USER_REGISTER", `Registered new user ${normalizedEmail}`, newUser.id);
+    await store.logAudit("USER_REGISTER", `Registered new user ${normalizedEmail}`, newUser.id);
 
     return NextResponse.json({
       success: true,

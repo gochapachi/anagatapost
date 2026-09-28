@@ -235,9 +235,34 @@ model Transaction {
   type        String   // CREDIT, DEBIT
   description String
   referenceId String?  // Cashfree order or Letter ID
+  // Balance immediately after this entry was written. The ledger is the audit
+  // trail: user.balancePaise must always equal the last entry's balanceAfterPaise.
+  balanceAfterPaise Int?
   createdAt   DateTime @default(now())
 
   @@index([userId])
+  @@index([referenceId])
+  @@index([createdAt])
+}
+
+/**
+ * One row per Cashfree order that has already moved money. Cashfree retries
+ * webhooks at-least-once and the browser can hit /verify repeatedly, so the
+ * unique index on orderId is what stops a wallet being credited twice.
+ */
+model PaymentEvent {
+  id            String   @id @default(uuid())
+  orderId       String   @unique
+  userId        String?
+  eventType     String
+  amountPaise   Int
+  letterId      String?
+  invoiceNumber String?
+  payload       String   @db.Text
+  processedAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([processedAt])
 }
 
 model Webhook {

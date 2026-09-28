@@ -1,9 +1,15 @@
 # Production Dockerfile for AnagataPost on Coolify / Ubuntu 24.04
 FROM node:20-alpine AS base
 
+# Prisma's query engine is a native binary. It needs libssl + the musl libc shim
+# at RUNTIME, not only while generating the client. The app used to construct a
+# PrismaClient without ever connecting, so a runner stage without these libraries
+# still "worked" — the first real query in production would have failed with
+# "Could not find the required Prisma engine".
+RUN apk add --no-cache libc6-compat openssl
+
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
@@ -25,6 +31,18 @@ RUN npx prisma generate
 
 # Build Next.js application
 RUN npm run build
+
+# One-shot image for schema work. The runner below carries only `.next`, so
+# `prisma migrate deploy` and `prisma/seed.js` physically cannot run inside the
+# app container — this stage exists to be run once, before the app rolls out:
+#   docker compose run --rm migrate
+# It keeps the Prisma CLI, the schema and prisma/migrations.
+FROM base AS migrate
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . ./
+RUN npx prisma generate
+CMD ["npx", "prisma", "migrate", "deploy"]
 
 # Production image, copy all the files and run next
 FROM base AS runner
@@ -51,5 +69,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 
 EXPOSE 3000
+
+# Reports unhealthy until the app AND its database are actually answering.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
 
 CMD ["node", "server.js"]

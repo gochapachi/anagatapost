@@ -1,0 +1,97 @@
+# AnagataPost stack.
+#
+# Secrets are resolved from the environment (or a local .env file that git and
+# .dockerignore both exclude). Variables marked REQUIRED abort `docker compose`
+# when missing: the stack must refuse to boot rather than fall back to a key that
+# is published in this repository.
+services:
+  anagatapost:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # REQUIRED — signs next-auth session JWTs. Generate: openssl rand -base64 32
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
+      # REQUIRED — pins the OAuth/callback origin so a spoofed Host header cannot
+      # steer the auth flow. Example: https://post.anagataitsolutions.in
+      - NEXTAUTH_URL=${NEXTAUTH_URL:?NEXTAUTH_URL is required}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://post.anagataitsolutions.in}
+      # Comma-separated addresses forced to ADMIN so the first operator can be
+      # bootstrapped before a roles table exists.
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/anagatapost?schema=public
+      # Payments. Empty credentials = development simulation, which is refused in
+      # production by src/lib/env.ts and the payment routes themselves.
+      - CASHFREE_APP_ID=${CASHFREE_APP_ID:-}
+      - CASHFREE_SECRET_KEY=${CASHFREE_SECRET_KEY:-}
+      - CASHFREE_ENVIRONMENT=${CASHFREE_ENVIRONMENT:-SANDBOX}
+      - NEXT_PUBLIC_CASHFREE_ENVIRONMENT=${NEXT_PUBLIC_CASHFREE_ENVIRONMENT:-SANDBOX}
+      # WhatsApp dispatch (Evolution API) and automation relay.
+      - EVOLUTION_API_URL=${EVOLUTION_API_URL:-https://evo.anagataitsolutions.in}
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY:-}
+      - EVOLUTION_INSTANCE_NAME=${EVOLUTION_INSTANCE_NAME:-anagata-post}
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-https://n8n.anagataitsolutions.in/webhook/anagatapost-events}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # The schema is applied before the new image serves traffic. Without this
+      # the app boots against a database that has no tables and every route 500s.
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - anagatapost_net
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: anagatapost
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d anagatapost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - anagatapost_net
+
+  # One-shot schema job. `migrate` is a Dockerfile stage, not the app image: the
+  # runner ships only `.next`, so the Prisma CLI and prisma/migrations are not
+  # present there. It applies the migrations, then exits 0.
+  #
+  #   docker compose run --rm migrate                      # apply migrations
+  #   docker compose run --rm migrate node prisma/seed.js   # demo data (dev only)
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
+    command: ["npx", "prisma", "migrate", "deploy"]
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/anagatapost?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - anagatapost_net
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  anagatapost_net:
+    driver: bridge
